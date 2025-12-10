@@ -1,20 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/main"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    android:background="#F5F5F5"> <!-- 背景设为浅灰，凸显TextureView非全屏 -->
 
-
-
-
-    <!-- 相机预览控件 -->
+    <!-- TextureView：固定尺寸（按920:960比例，比如460dp×480dp），居中显示 -->
     <TextureView
         android:id="@+id/textureView"
-        android:layout_width="100dp"
-        android:layout_height="100dp" />
+        android:layout_width="460dp"
+    android:layout_height="480dp"
+    android:layout_centerInParent="true" />
 
+    <!-- 黑色拍照按钮：放在TextureView下方 -->
+    <Button
+        android:id="@+id/btnTakePhoto"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_below="@id/textureView"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="20dp"
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+        android:text="拍照"
+        android:textColor="@android:color/white"
+        android:textSize="16sp" />
+
+</RelativeLayout>
