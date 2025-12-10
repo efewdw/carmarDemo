@@ -7,13 +7,17 @@ import android.content.pm.PackageManager;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
+import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.params.StreamConfigurationMap;
 import android.nfc.Tag;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.util.Log;
+import android.util.Size;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
@@ -33,14 +37,19 @@ import androidx.core.view.WindowInsetsCompat;
 import java.util.Arrays;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener{
+    private Handler handler;
+    //会话
+    private CameraCaptureSession cameraCaptureSession;
+    private SurfaceTexture surfaceTexture;
     //相机预览线程后续所有东西都在这个线程中进行
-    private Handler cameraHandler;
+    private HandlerThread cameraHandler;
     //正在使用的相机id
     private Integer carmarId;
     private TextureView textureView;
     private volatile CameraDevice cameraDevice;
 
     CameraDevice.StateCallback cameraCallback = new CameraDevice.StateCallback() {
+
 
 
         @Override
@@ -59,6 +68,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             String id = camera.getId();
             Log.d("id",id);
             cameraDevice=camera;
+            startPreview(surfaceTexture);
 
 
 
@@ -95,18 +105,45 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             new TextureView.SurfaceTextureListener() {
                 @Override
                 public void onSurfaceTextureAvailable(SurfaceTexture st, int width, int height) {
+                    surfaceTexture=st;
+                    open();
 
-                    startPreview(st);
+
+
                 }
 
                 @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) {}
                 @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture st) { return true; }
                 @Override public void onSurfaceTextureUpdated(SurfaceTexture st) {}
             };
-
+    //切前台
     @Override
     protected void onResume() {
 super.onResume();
+if(textureView.isAvailable()){
+    open();
+}
+
+
+    }
+//切后台
+    @Override
+    protected void onPause() {
+        super.onPause();
+        try {
+            cameraCaptureSession.stopRepeating();
+            cameraCaptureSession.close();
+            cameraDevice.close();
+            cameraCaptureSession=null;
+            cameraDevice=null;
+            cameraHandler.quitSafely();
+            cameraHandler=null;
+
+
+
+        } catch (CameraAccessException e) {
+            throw new RuntimeException(e);
+        }
 
     }
 
@@ -153,9 +190,11 @@ super.onResume();
                 Log.d("CameraPermission", "可用相机ID：" + cameraIds[0]);
                 // 后续可调用 cameraManager.openCamera(...) 打开相机
                 Log.d("5","相机handler线程的创建");
-               cameraHandler =new Handler();
+               cameraHandler =new HandlerThread("wps");
+               cameraHandler.start();
+                 handler = new Handler(cameraHandler.getLooper());//todo
                 Log.d("6","调用相机api2.0的打开相机操作");
-                cameraManager.openCamera("1",cameraCallback,cameraHandler);
+                cameraManager.openCamera("1",cameraCallback,handler);
             } else {
                 Toast.makeText(this, "设备无可用相机", Toast.LENGTH_SHORT).show();
             }
@@ -177,6 +216,14 @@ super.onResume();
 
         try {
             Log.d("8","开始设置缓冲区大小");
+            CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics("1");
+            StreamConfigurationMap map = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+            Size[] outputSizes = map.getOutputSizes(SurfaceTexture.class);
+            for (int i = 0; i < outputSizes.length; i++) {
+                Log.d("sb","适配手机的尺寸"+outputSizes[i]);
+
+            }
+
             // 1. 从 TextureView 拿到 SurfaceTexture，并设置缓冲区大小
 //            SurfaceTexture surfaceTexture = textureView.getSurfaceTexture();
             surfaceTexture.setDefaultBufferSize(
@@ -202,6 +249,7 @@ super.onResume();
                     new CameraCaptureSession.StateCallback() {
                         @Override
                         public void onConfigured(@NonNull CameraCaptureSession session) {
+                            cameraCaptureSession=session;
                             Log.d("12","相机预览开始设置为连续预览");
 
                             try {
@@ -210,7 +258,7 @@ super.onResume();
                                 session.setRepeatingRequest(
                                         previewRequestBuilder.build(),
                                         null,
-                                        cameraHandler
+                                        handler
                                 );
                                 Log.d("12","相机预览成功");
                             } catch (CameraAccessException e) {
@@ -223,7 +271,7 @@ super.onResume();
                             // 会话配置失败时的处理
                         }
                     },
-                    cameraHandler   // 回调运行的线程（后台）
+                    handler   // 回调运行的线程（后台）
             );
 
         } catch (CameraAccessException e) {
