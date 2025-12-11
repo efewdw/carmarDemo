@@ -217,9 +217,10 @@ if(textureView.isAvailable()){
             if (shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
                 // 可选：弹出对话框，向用户说明需要相机权限的原因（比如“需要相机权限才能拍照”）
                 Toast.makeText(this, "需要相机权限才能使用拍照功能，请允许", Toast.LENGTH_SHORT).show();
+                // 正式申请权限（第二个参数是权限数组，可同时申请多个权限）
+                requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
             }
-            // 正式申请权限（第二个参数是权限数组，可同时申请多个权限）
-            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
+
         }
     }
     /**
