@@ -37,8 +37,11 @@ import android.util.Size;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -76,6 +79,7 @@ import java.util.Locale;
  */
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener{
+
     private CaptureRequest.Builder recordBuilder;
     private CaptureRequest.Builder previewBuilder;
     private Surface previewSurface;
@@ -93,12 +97,55 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     //相机预览线程后续所有东西都在这个线程中进行
     private HandlerThread cameraHandler;
     //正在使用的相机id
-    private Integer carmarId;
+    private String carmarId="0";
     private TextureView textureView;
     private volatile CameraDevice cameraDevice;
     private  MediaRecorder mediaRecorder;
     private String videoFilePath;
     private Integer isRecording=0;
+    private ImageView  button_right;
+    // 核心变量：记录秒数（仅保留技术核心）
+    private int recordSeconds = 0;
+    // 计时核心：Handler + Runnable（Android推荐）
+    private Handler recordHandler=new Handler(Looper.getMainLooper());
+    private Runnable recordRunnable;
+    private TextView textView;
+    // 启动计时（纯技术逻辑）
+    public void startRecordTimer() {
+        // 重置计时
+        recordSeconds = 0;
+        // 定义每秒执行的逻辑
+        recordRunnable = new Runnable() {
+
+            @Override
+            public void run() {
+                // 核心：每秒累加1秒
+                recordSeconds++;
+                textView.setText("您已开始录制"+recordSeconds);
+                textView.setVisibility(View.VISIBLE);
+                // 此处可直接对接你的业务逻辑（如判断时长、更新数据）
+                Log.d("wd","录制时长"+recordSeconds);
+
+                // 循环执行：每隔1000ms（1秒）执行一次
+                recordHandler.postDelayed(this, 1000);
+            }
+        };
+        // 立即启动计时
+        recordHandler.post(recordRunnable);
+    }
+    // 停止计时（纯技术逻辑）
+    public void stopRecordTimer() {
+        Log.d("wd","显示的出来吗1");
+        // 核心：移除未执行的Runnable，停止计时
+        if (recordHandler != null && recordRunnable != null) {
+            recordHandler.removeCallbacks(recordRunnable);
+            textView.setVisibility(View.GONE);
+            Log.d("wd","显示的出来吗");
+        }
+        // 可选：获取最终计时结果
+
+    }
+
 
     CameraDevice.StateCallback cameraCallback = new CameraDevice.StateCallback() {
 
@@ -156,6 +203,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
               }
 
               mediaRecorder.start();
+             startRecording();
+
               isRecording=1;
               Log.d("wd","开始录像了");
 
@@ -172,8 +221,33 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // 第一步：隐藏标题栏（如果用了ActionBar）
+        supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        // 第二步：隐藏状态栏、导航栏，设置沉浸式全屏
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+ 新方式
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            // 低版本兼容
+            getWindow().setFlags(
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN
+            );
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION // 隐藏导航栏
+                            | View.SYSTEM_UI_FLAG_FULLSCREEN // 隐藏状态栏
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY // 沉浸式（滑动边缘临时显示，松手隐藏）
+            );
+        }
         setContentView(R.layout.activity_main);
         button = (ImageView)findViewById(R.id.btnTakePhoto);
+        button_right = (ImageView)findViewById(R.id.btnRight);
+         textView = (TextView)findViewById(R.id.RecordTime);
+        button_right.setOnClickListener(this);
         button.setOnClickListener(this);
         button.setOnLongClickListener(longClickListener);
         cameraHandler=new HandlerThread("camearHandler");
@@ -190,6 +264,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Log.d("2","获取相机载体" );
 
 
+    }
+    // 开始录像方法
+    private void startRecording() {
+
+        // 1. 切换图标：相机图标 → 红色录像图标
+        button.setImageResource(R.drawable.ic_record);
+        // 3. 启动计时（之前的逻辑）
+        startRecordTimer();
+        // 4. 实际录像逻辑...
     }
 
     private final TextureView.SurfaceTextureListener surfaceTextureListener =
@@ -381,7 +464,8 @@ if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GR
 
                 Log.d("6","调用相机api2.0的打开相机操作");
                 if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED){
-                    cameraManager.openCamera("1",cameraCallback,null);
+
+                    cameraManager.openCamera(carmarId,cameraCallback,null);
                 }
 
             } else {
@@ -712,60 +796,85 @@ if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GR
 
     @Override
     public void onClick(View v) {
-        if(isRecording==1&&mediaRecorder!=null){
-            Log.d("wd",""+isRecording);
-            Log.d("wd","录像结束了");
-            Log.d("wd",videoFilePath);
-            mediaRecorder.stop();
-            try {
-                cameraCaptureSession.setRepeatingRequest(previewBuilder.build(),null,handler);
-            } catch (CameraAccessException e) {
-                throw new RuntimeException(e);
-            }
+        if(v.getId()==R.id.btnTakePhoto){
+            if(isRecording==1&&mediaRecorder!=null){
+                Log.d("wd",""+isRecording);
+                Log.d("wd","录像结束了");
+                Log.d("wd",videoFilePath);
+                mediaRecorder.stop();
+                stopRecordTimer();
+                try {
+                    cameraCaptureSession.setRepeatingRequest(previewBuilder.build(),null,handler);
+                } catch (CameraAccessException e) {
+                    throw new RuntimeException(e);
+                }
 
-            scan(videoFile);
-            mediaRecorder.reset();
-            isRecording=0;
+                scan(videoFile);
+                mediaRecorder.reset();
+                isRecording=0;
 
-            Toast.makeText(MainActivity.this,"保存录制视频成功",Toast.LENGTH_LONG);
-        }
-        else {
-            CaptureRequest.Builder captureBuilder = null;
-            try {
-                captureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
-            } catch (CameraAccessException e) {
-                throw new RuntimeException(e);
+                Toast.makeText(MainActivity.this,"保存录制视频成功",Toast.LENGTH_LONG);
             }
-            captureBuilder.addTarget(imageReader.getSurface());
-            captureBuilder.set(CaptureRequest.CONTROL_AF_MODE,
-                    CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+            else {
+                CaptureRequest.Builder captureBuilder = null;
+                try {
+                    captureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+                } catch (CameraAccessException e) {
+                    throw new RuntimeException(e);
+                }
+                captureBuilder.addTarget(imageReader.getSurface());
+                captureBuilder.set(CaptureRequest.CONTROL_AF_MODE,
+                        CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
 
 // 设置拍照方向
-            try {
-                CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics("1");
-                int rotation = getWindowManager().getDefaultDisplay().getRotation();
-                captureBuilder.set(CaptureRequest.JPEG_ORIENTATION,
-                        getOrientation(rotation,cameraCharacteristics));
-            } catch (CameraAccessException e) {
-                throw new RuntimeException(e);
-            }
+                try {
+                    CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics("1");
+                    int rotation = getWindowManager().getDefaultDisplay().getRotation();
+                    captureBuilder.set(CaptureRequest.JPEG_ORIENTATION,
+                            getOrientation(rotation,cameraCharacteristics));
+                } catch (CameraAccessException e) {
+                    throw new RuntimeException(e);
+                }
 
 
 // 执行拍照
-            try {
-                cameraCaptureSession.capture(captureBuilder.build(),
-                        new CameraCaptureSession.CaptureCallback() {
-                            @Override
-                            public void onCaptureCompleted(CameraCaptureSession session,
-                                                           CaptureRequest request, TotalCaptureResult result) {
-                                // 拍照完成
-                            }
-                        }, handler);
-            } catch (CameraAccessException e) {
-                throw new RuntimeException(e);
+                try {
+                    cameraCaptureSession.capture(captureBuilder.build(),
+                            new CameraCaptureSession.CaptureCallback() {
+                                @Override
+                                public void onCaptureCompleted(CameraCaptureSession session,
+                                                               CaptureRequest request, TotalCaptureResult result) {
+                                    // 拍照完成
+                                }
+                            }, handler);
+                } catch (CameraAccessException e) {
+                    throw new RuntimeException(e);
+                }
+
+            }
+        }
+        if (v.getId()==R.id.btnRight){
+            //切换摄像头
+            if (carmarId.equals("0")){
+                if (isRecording==1){
+                    Toast.makeText(MainActivity.this,"请先结束录像",Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                carmarId="1";
+                if (cameraCaptureSession!=null){
+                    try {
+                        cameraCaptureSession.stopRepeating();
+                        cameraCaptureSession.close();
+
+
+                    } catch (CameraAccessException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
             }
 
         }
+
 
     }
     /**
