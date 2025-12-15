@@ -83,6 +83,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private CaptureRequest.Builder recordBuilder;
     private CaptureRequest.Builder previewBuilder;
     private Surface previewSurface;
+    private Surface mediaSurface;
     //用来设置图片不重复的
     private Integer integer=0;
     private String formattedDate;
@@ -159,6 +160,30 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         @Override
         public void onError(@NonNull CameraDevice camera, int error) {
+            // 传统 switch 语句解析错误码（兼容所有 Java 版本）
+            String errorDesc;
+            switch (error) {
+                case CameraDevice.StateCallback.ERROR_CAMERA_IN_USE:
+                    errorDesc = "相机被占用（ERROR_CAMERA_IN_USE）";
+                    break;
+                case CameraDevice.StateCallback.ERROR_MAX_CAMERAS_IN_USE:
+                    errorDesc = "超出最大相机使用数（ERROR_MAX_CAMERAS_IN_USE）";
+                    break;
+                case CameraDevice.StateCallback.ERROR_CAMERA_DISABLED:
+                    errorDesc = "相机被禁用（权限/系统策略）（ERROR_CAMERA_DISABLED）";
+                    break;
+                case CameraDevice.StateCallback.ERROR_CAMERA_DEVICE:
+                    errorDesc = "相机硬件故障（ERROR_CAMERA_DEVICE）";
+                    break;
+                case CameraDevice.StateCallback.ERROR_CAMERA_SERVICE:
+                    errorDesc = "相机服务崩溃（ERROR_CAMERA_SERVICE）";
+                    break;
+                default:
+                    errorDesc = "未知错误码：" + error;
+                    break;
+            }
+            // 打印错误日志（包含错误码+描述）
+            Log.e("CameraError", "相机 onError 触发：错误码=" + error + "，描述=" + errorDesc);
             Log.d("carmar","相机回调失败");
         }
 
@@ -335,75 +360,76 @@ if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GR
 
 
     }
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        // 第一步：匹配相机权限的请求码（避免和其他权限请求混淆）
-        if (requestCode == REQUEST_CAMERA_PERMISSION) {
-            // 第二步：检查授权结果（必须判空，避免数组越界）
-            if (grantResults.length > 0) {
-                // 因为只申请了 CAMERA 一个权限，所以取 grantResults[0]
-                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    // 情况1：权限授予成功 → 初始化相机
-                    Log.d("CameraPermission", "相机权限授予成功");
-                  if(textureView.isAvailable()){
-                      open();
-                  }else{
-                      textureView.setSurfaceTextureListener(surfaceTextureListener);
-                  }
-                } else {
-                    // 情况2：权限授予失败 → 提示用户，可选引导到设置页
-                    Log.d("CameraPermission", "相机权限授予失败");
-                    Toast.makeText(this, "未授予相机权限，无法使用预览功能", Toast.LENGTH_SHORT).show();
-
-                    // 进阶：判断用户是否“永久拒绝”（不再提示），引导到应用设置页
-                    if (!ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA)) {
-                        // 用户勾选了“不再提示”，弹窗引导到设置页开启权限
-                        new AlertDialog.Builder(this)
-                                .setTitle("权限申请")
-                                .setMessage("需要相机权限才能使用功能，请前往设置开启")
-                                .setPositiveButton("去设置", (dialog, which) -> {
-                                    // 跳转到应用权限设置页
-                                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                                    Uri uri = Uri.fromParts("package", getPackageName(), null);
-                                    intent.setData(uri);
-                                    startActivity(intent);
-                                })
-                                .setNegativeButton("取消", null)
-                                .show();
-                    }
-                }
-            }
-        }
-    }
+//    @Override
+//    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+//        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+//
+//        // 第一步：匹配相机权限的请求码（避免和其他权限请求混淆）
+//        if (requestCode == REQUEST_CAMERA_PERMISSION) {
+//            // 第二步：检查授权结果（必须判空，避免数组越界）
+//            if (grantResults.length > 0) {
+//                // 因为只申请了 CAMERA 一个权限，所以取 grantResults[0]
+//                if (grantResults[0] == PackageManager.PERMISSION_GRANTED
+//               &&grantResults[1] == PackageManager.PERMISSION_GRANTED
+//                &&grantResults[2] == PackageManager.PERMISSION_GRANTED
+//                &&grantResults[3] == PackageManager.PERMISSION_GRANTED) {
+//                    // 情况1：权限授予成功 → 初始化相机
+//                    Log.d("CameraPermission", "所有权限授予成功");
+//                  if(textureView.isAvailable()){
+//                      open();
+//                  }else{
+//                      textureView.setSurfaceTextureListener(surfaceTextureListener);
+//                  }
+//                } else {
+//                    // 情况2：权限授予失败 → 提示用户，可选引导到设置页
+//                    Log.d("CameraPermission", "相机权限授予失败");
+//                    Toast.makeText(this, "未授予相机权限，无法使用预览功能", Toast.LENGTH_SHORT).show();
+//
+//                    // 进阶：判断用户是否“永久拒绝”（不再提示），引导到应用设置页
+//                    if (!ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA)) {
+//                        // 用户勾选了“不再提示”，弹窗引导到设置页开启权限
+//                        new AlertDialog.Builder(this)
+//                                .setTitle("权限申请")
+//                                .setMessage("需要相机权限才能使用功能，请前往设置开启")
+//                                .setPositiveButton("去设置", (dialog, which) -> {
+//                                    // 跳转到应用权限设置页
+//                                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+//                                    Uri uri = Uri.fromParts("package", getPackageName(), null);
+//                                    intent.setData(uri);
+//                                    startActivity(intent);
+//                                })
+//                                .setNegativeButton("取消", null)
+//                                .show();
+//                    }
+//                }
+//            }
+//        }
+//    }
 //切后台
     @Override
     protected void onPause() {
         super.onPause();
-        try {
-           if(isRecording==1){
-               mediaRecorder.stop();
-           }
-           if (cameraCaptureSession!=null){
-               cameraCaptureSession.stopRepeating();
-               cameraCaptureSession.close();
-           } if (cameraDevice!=null){
-                cameraDevice.close();
-                arrayList=null;
-            }
+      if (mediaRecorder!=null){
+          mediaRecorder.reset();
+      }
+      if (cameraCaptureSession!=null){
+          try {
+              cameraCaptureSession.stopRepeating();
 
+          } catch (CameraAccessException e) {
+              throw new RuntimeException(e);
+          }
+      }
+      if(cameraDevice!=null){
+          cameraDevice.close();
+      }
+        mediaRecorder = null;
+      surfaceTexture=null;
+      cameraCaptureSession= null;
+        cameraDevice = null;
+        imageReader = null;
 
-//            cameraCaptureSession=null;
-//            cameraDevice=null;
-
-
-
-
-
-        } catch (CameraAccessException e) {
-            throw new RuntimeException(e);
-        }
+      arrayList=null;
 
     }
 
@@ -422,35 +448,14 @@ if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GR
 
     }
 
-    /**
-     * 检查并申请相机权限
-     */
-    private void checkAndRequestCameraPermission() throws CameraAccessException {
-        // 步骤1：检查权限是否已授予（安卓6.0+方法）
-        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-            // 权限已授予，直接执行相机操作
-            String[] cameraIdList = cameraManager.getCameraIdList();
-            Log.d("4","获取到的相机id"+ Arrays.toString(cameraIdList));
-            open();
 
-
-        } else {
-            // 步骤2：权限未授予，向用户申请
-            // shouldShowRequestPermissionRationale：判断是否需要向用户解释为什么需要该权限
-            if (shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
-                // 可选：弹出对话框，向用户说明需要相机权限的原因（比如“需要相机权限才能拍照”）
-                Toast.makeText(this, "需要相机权限才能使用拍照功能，请允许", Toast.LENGTH_SHORT).show();
-                // 正式申请权限（第二个参数是权限数组，可同时申请多个权限）
-                requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
-            }
-
-        }
-    }
     /**
      * 获取到相机id之后
      * 后续相机的打开等操作
      */
     public void open() {
+
+        Log.d("wdw","调用一次");
         try {
             // 枚举相机ID（测试相机权限是否生效）
             String[] cameraIds = cameraManager.getCameraIdList();
@@ -458,14 +463,14 @@ if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GR
                 Toast.makeText(this, "相机权限已授予，检测到" + cameraIds.length + "个相机", Toast.LENGTH_SHORT).show();
                 Log.d("CameraPermission", "可用相机ID：" + cameraIds[0]);
                 // 后续可调用 cameraManager.openCamera(...) 打开相机
-                Log.d("5","相机handler线程的创建");
+
 
                  Log.d("wd",""+surfaceTexture);
 
                 Log.d("6","调用相机api2.0的打开相机操作");
                 if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED){
 
-                    cameraManager.openCamera(carmarId,cameraCallback,null);
+                    cameraManager.openCamera(carmarId,cameraCallback,handler);
                 }
 
             } else {
@@ -511,9 +516,9 @@ if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GR
             //创建mediaRecoder
             initializeMediaRecorders();
             Log.d("wd",""+mediaRecorder);
-            Surface surface = mediaRecorder.getSurface();
-            Log.d("wd","是否有效"+surface.isValid());
-            arrayList.add(surface);
+           mediaSurface = mediaRecorder.getSurface();
+            Log.d("wd","是否有效"+mediaSurface.isValid());
+            arrayList.add(mediaSurface);
             imageReader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener(){
                 /**
                  * 创建
@@ -597,7 +602,7 @@ if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GR
              recordBuilder =
                     cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
             previewBuilder.addTarget(previewSurface);
-            recordBuilder.addTarget(surface);
+            recordBuilder.addTarget(mediaSurface);
             recordBuilder.addTarget(previewSurface);
             setupRecordingRequest(recordBuilder);
             // 自动对焦模式（如果支持）
